@@ -79,6 +79,10 @@ class _TelaRegistroAtividadeState extends State<TelaRegistroAtividade> {
   // Lista de atividades registradas (o "diário")
   final List<Atividade> _atividades = [];
 
+  // Quantos caracteres já foram digitados em Observações.
+  // Quem mantém esse número atualizado é o onChanged do campo.
+  int _tamanhoObs = 0;
+
   @override
   void dispose() {
     // Libera a memória dos controllers quando a tela sai
@@ -137,6 +141,38 @@ class _TelaRegistroAtividadeState extends State<TelaRegistroAtividade> {
     return null; // null = campo válido
   }
 
+  // ───────────────── Reações ao digitar (onChanged) ─────────────────
+
+  /// Chamado pelo onChanged do campo Data, a cada tecla digitada.
+  /// Mantém o texto no formato DD/MM/AAAA colocando as barras sozinho,
+  /// para o usuário só precisar digitar os números.
+  void _aplicarMascaraData(String texto) {
+    // Fica só com os dígitos: assim as barras antigas não atrapalham a conta.
+    final digitos = texto.replaceAll(RegExp(r'\D'), '');
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < digitos.length && i < 8; i++) {
+      if (i == 2 || i == 4) buffer.write('/'); // depois do dia e depois do mês
+      buffer.write(digitos[i]);
+    }
+    final formatado = buffer.toString();
+
+    // Se nada mudou, não mexe no controller: reescrever o texto joga o cursor
+    // para o fim e o campo ficaria "pulando" enquanto se digita.
+    if (formatado == texto) return;
+
+    _dataController.value = TextEditingValue(
+      text: formatado,
+      selection: TextSelection.collapsed(offset: formatado.length),
+    );
+  }
+
+  /// Chamado pelo onChanged do campo Observações, a cada tecla digitada.
+  /// Guarda o tamanho do texto no estado para o contador da tela acompanhar.
+  void _contarObservacao(String texto) {
+    setState(() => _tamanhoObs = texto.trim().length);
+  }
+
   // ───────────────── Ações ─────────────────
 
   Future<void> _abrirCalendario() async {
@@ -175,6 +211,9 @@ class _TelaRegistroAtividadeState extends State<TelaRegistroAtividade> {
       _atividades.add(nova);
       _atividades.sort((a, b) => b.data.compareTo(a.data)); // mais recente primeiro
       _atividadeSelecionada = null;
+      // Limpar o controller por código não dispara o onChanged,
+      // então zeramos o contador na mão.
+      _tamanhoObs = 0;
     });
 
     // 4. Limpa o formulário para o próximo registro
@@ -267,6 +306,8 @@ class _TelaRegistroAtividadeState extends State<TelaRegistroAtividade> {
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9/]')),
                   LengthLimitingTextInputFormatter(10),
                 ],
+                // Dispara a cada tecla: vai montando DD/MM/AAAA enquanto digita.
+                onChanged: _aplicarMascaraData,
                 validator: _validarData,
               ),
               const SizedBox(height: 16),
@@ -282,6 +323,22 @@ class _TelaRegistroAtividadeState extends State<TelaRegistroAtividade> {
                     padding: EdgeInsets.only(bottom: 40.0),
                     child: Icon(Icons.notes),
                   ),
+                ),
+                // Dispara a cada tecla: atualiza o contador logo abaixo.
+                onChanged: _contarObservacao,
+              ),
+
+              // Contador vivo: só muda porque o onChanged acima chama setState.
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 4),
+                child: Text(
+                  _tamanhoObs == 0
+                      ? 'Nenhuma observação digitada'
+                      : _tamanhoObs == 1
+                          ? '1 caractere digitado'
+                          : '$_tamanhoObs caracteres digitados',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
               ),
               const SizedBox(height: 32),
